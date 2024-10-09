@@ -196,45 +196,122 @@ class GeneFace2Infer:
         out_name = self.forward_system(samples, inp)
         return out_name
         
+    # def prepare_batch_from_inp(self, inp):
+    #     """
+    #     :param inp: {'audio_source_name': (str)}
+    #     :return: a dict that contains the condition feature of NeRF
+    #     """
+    #     sample = {}
+    #     # Process Audio
+    #     self.save_wav16k(inp['drv_audio_name'])
+    #     hubert = self.get_hubert(self.wav16k_name)
+    #     t_x = hubert.shape[0]
+    #     x_mask = torch.ones([1, t_x]).float() # mask for audio frames
+    #     y_mask = torch.ones([1, t_x//2]).float() # mask for motion/image frames
+    #     f0 = self.get_f0(self.wav16k_name)
+    #     if f0.shape[0] > len(hubert):
+    #         f0 = f0[:len(hubert)]
+    #     else:
+    #         num_to_pad = len(hubert) - len(f0)
+    #         f0 = np.pad(f0, pad_width=((0,num_to_pad), (0,0)))
+
+    #     sample.update({
+    #         'hubert': torch.from_numpy(hubert).float().unsqueeze(0).cuda(),
+    #         'f0': torch.from_numpy(f0).float().reshape([1,-1]).cuda(),
+    #         'x_mask': x_mask.cuda(),
+    #         'y_mask': y_mask.cuda(),
+    #         })
+        
+    #     sample['audio'] = sample['hubert']
+    #     sample['blink'] = torch.zeros([1, t_x, 1]).long().cuda()
+
+    #     sample['eye_amp'] = torch.ones([1, 1]).cuda() * 1.0
+    #     sample['mouth_amp'] = torch.ones([1, 1]).cuda() * float(inp['mouth_amp'])
+    #     # sample['id'] = torch.tensor(self.dataset.ds_dict['id'][0:t_x//2]).cuda()
+    #     sample['id'] = torch.tensor(self.dataset.ds_dict['id'][0:1]).cuda().repeat([t_x//2, 1])
+    #     pose_lst = []
+    #     euler_lst = []
+    #     trans_lst = []
+    #     rays_o_lst = []
+    #     rays_d_lst = []
+
+    #     if '-' in inp['drv_pose']:
+    #         start_idx, end_idx = inp['drv_pose'].split("-")
+    #         start_idx = int(start_idx)
+    #         end_idx = int(end_idx)
+    #         ds_ngp_pose_lst = [self.dataset.poses[i].unsqueeze(0) for i in range(start_idx, end_idx)]
+    #         ds_euler_lst = [torch.tensor(self.dataset.ds_dict['euler'][i]) for i in range(start_idx, end_idx)]
+    #         ds_trans_lst = [torch.tensor(self.dataset.ds_dict['trans'][i]) for i in range(start_idx, end_idx)]
+
+    #     for i in range(t_x//2):
+    #         if inp['drv_pose'] == 'static':
+    #             ngp_pose = self.dataset.poses[0].unsqueeze(0)
+    #             euler = torch.tensor(self.dataset.ds_dict['euler'][0])
+    #             trans = torch.tensor(self.dataset.ds_dict['trans'][0])
+    #         elif '-' in inp['drv_pose']:
+    #             mirror_idx = mirror_index(i, len(ds_ngp_pose_lst))
+    #             ngp_pose = ds_ngp_pose_lst[mirror_idx]
+    #             euler = ds_euler_lst[mirror_idx]
+    #             trans = ds_trans_lst[mirror_idx]
+    #         else:
+    #             ngp_pose = self.dataset.poses[i].unsqueeze(0)
+    #             euler = torch.tensor(self.dataset.ds_dict['euler'][i])
+    #             trans = torch.tensor(self.dataset.ds_dict['trans'][i])
+
+    #         rays = get_rays(ngp_pose.cuda(), self.dataset.intrinsics, self.dataset.H, self.dataset.W, N=-1)
+    #         rays_o_lst.append(rays['rays_o'].cuda())
+    #         rays_d_lst.append(rays['rays_d'].cuda())
+    #         pose = convert_poses(ngp_pose).cuda()
+    #         pose_lst.append(pose)
+    #         euler_lst.append(euler)
+    #         trans_lst.append(trans)
+    #     sample['rays_o'] = rays_o_lst
+    #     sample['rays_d'] = rays_d_lst
+    #     sample['poses'] = pose_lst
+    #     sample['euler'] = torch.stack(euler_lst).cuda()
+    #     sample['trans'] = torch.stack(trans_lst).cuda()
+    #     sample['bg_img'] = self.dataset.bg_img.reshape([1,-1,3]).cuda()
+    #     sample['bg_coords'] = self.dataset.bg_coords.cuda()
+    #     return sample
     def prepare_batch_from_inp(self, inp):
-        """
-        :param inp: {'audio_source_name': (str)}
-        :return: a dict that contains the condition feature of NeRF
-        """
         sample = {}
+        
         # Process Audio
         self.save_wav16k(inp['drv_audio_name'])
         hubert = self.get_hubert(self.wav16k_name)
         t_x = hubert.shape[0]
-        x_mask = torch.ones([1, t_x]).float() # mask for audio frames
-        y_mask = torch.ones([1, t_x//2]).float() # mask for motion/image frames
+        x_mask = torch.ones([1, t_x]).float()  # mask for audio frames
+        y_mask = torch.ones([1, t_x // 2]).float()  # mask for motion/image frames
         f0 = self.get_f0(self.wav16k_name)
+        
+        # Padding f0 to match hubert length if necessary
         if f0.shape[0] > len(hubert):
             f0 = f0[:len(hubert)]
         else:
             num_to_pad = len(hubert) - len(f0)
-            f0 = np.pad(f0, pad_width=((0,num_to_pad), (0,0)))
+            f0 = np.pad(f0, pad_width=((0, num_to_pad), (0, 0)))
 
         sample.update({
             'hubert': torch.from_numpy(hubert).float().unsqueeze(0).cuda(),
-            'f0': torch.from_numpy(f0).float().reshape([1,-1]).cuda(),
+            'f0': torch.from_numpy(f0).float().reshape([1, -1]).cuda(),
             'x_mask': x_mask.cuda(),
             'y_mask': y_mask.cuda(),
-            })
+        })
         
         sample['audio'] = sample['hubert']
         sample['blink'] = torch.zeros([1, t_x, 1]).long().cuda()
-
         sample['eye_amp'] = torch.ones([1, 1]).cuda() * 1.0
         sample['mouth_amp'] = torch.ones([1, 1]).cuda() * float(inp['mouth_amp'])
-        # sample['id'] = torch.tensor(self.dataset.ds_dict['id'][0:t_x//2]).cuda()
-        sample['id'] = torch.tensor(self.dataset.ds_dict['id'][0:1]).cuda().repeat([t_x//2, 1])
+        sample['id'] = torch.tensor(self.dataset.ds_dict['id'][0:1]).cuda().repeat([t_x // 2, 1])
+        
+        # Prepare pose, euler, trans, rays lists
         pose_lst = []
         euler_lst = []
         trans_lst = []
         rays_o_lst = []
         rays_d_lst = []
 
+        # Get pose range
         if '-' in inp['drv_pose']:
             start_idx, end_idx = inp['drv_pose'].split("-")
             start_idx = int(start_idx)
@@ -243,8 +320,9 @@ class GeneFace2Infer:
             ds_euler_lst = [torch.tensor(self.dataset.ds_dict['euler'][i]) for i in range(start_idx, end_idx)]
             ds_trans_lst = [torch.tensor(self.dataset.ds_dict['trans'][i]) for i in range(start_idx, end_idx)]
 
-        for i in range(t_x//2):
+        for i in range(t_x // 2):
             if inp['drv_pose'] == 'static':
+                # Use the first frame for static poses
                 ngp_pose = self.dataset.poses[0].unsqueeze(0)
                 euler = torch.tensor(self.dataset.ds_dict['euler'][0])
                 trans = torch.tensor(self.dataset.ds_dict['trans'][0])
@@ -254,10 +332,18 @@ class GeneFace2Infer:
                 euler = ds_euler_lst[mirror_idx]
                 trans = ds_trans_lst[mirror_idx]
             else:
-                ngp_pose = self.dataset.poses[i].unsqueeze(0)
-                euler = torch.tensor(self.dataset.ds_dict['euler'][i])
-                trans = torch.tensor(self.dataset.ds_dict['trans'][i])
+                # Make sure the index does not exceed the length of poses
+                if i >= len(self.dataset.poses):
+                    # Use the last frame if index exceeds available poses
+                    ngp_pose = self.dataset.poses[-1].unsqueeze(0)
+                    euler = torch.tensor(self.dataset.ds_dict['euler'][-1])
+                    trans = torch.tensor(self.dataset.ds_dict['trans'][-1])
+                else:
+                    ngp_pose = self.dataset.poses[i].unsqueeze(0)
+                    euler = torch.tensor(self.dataset.ds_dict['euler'][i])
+                    trans = torch.tensor(self.dataset.ds_dict['trans'][i])
 
+            # Compute rays and append to lists
             rays = get_rays(ngp_pose.cuda(), self.dataset.intrinsics, self.dataset.H, self.dataset.W, N=-1)
             rays_o_lst.append(rays['rays_o'].cuda())
             rays_d_lst.append(rays['rays_d'].cuda())
@@ -265,14 +351,18 @@ class GeneFace2Infer:
             pose_lst.append(pose)
             euler_lst.append(euler)
             trans_lst.append(trans)
+
+        # Update sample with rays and poses
         sample['rays_o'] = rays_o_lst
         sample['rays_d'] = rays_d_lst
         sample['poses'] = pose_lst
         sample['euler'] = torch.stack(euler_lst).cuda()
         sample['trans'] = torch.stack(trans_lst).cuda()
-        sample['bg_img'] = self.dataset.bg_img.reshape([1,-1,3]).cuda()
+        sample['bg_img'] = self.dataset.bg_img.reshape([1, -1, 3]).cuda()
         sample['bg_coords'] = self.dataset.bg_coords.cuda()
+
         return sample
+
 
     @torch.no_grad()
     def get_hubert(self, wav16k_name):
